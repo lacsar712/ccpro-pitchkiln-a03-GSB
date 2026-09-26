@@ -8,9 +8,22 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .forms import OpenCookRunForm, PhaseChangeForm, ResinLotForm, SoftPointProbeForm
-from .models import CookRun, FireHearth, ResinLot
+from .forms import (
+    ImpurityTestForm,
+    OpenCookRunForm,
+    PhaseChangeForm,
+    ResinLotForm,
+    SoftPointProbeForm,
+)
+from .models import CookRun, FireHearth, ImpurityTest, ResinLot
+from .services.assays import (
+    AssayConflict,
+    assay_status_map,
+    record_assay,
+    void_assay as perform_void_assay,
+)
 from .services.floor_rules import change_hearth_phase
+from .services.roles import can_record_assay, can_void_assay
 
 
 def _wants_htmx(request):
@@ -207,5 +220,73 @@ def resin_lot_feed(request):
             }
         )
 
-    lots = ResinLot.objects.all()[:40]
-    return render(request, "resin/feed.html", {"lots": lots, "form": form})
+    lots = list(ResinLot.objects.all()[:40])
+    assay_map = assay_status_map(lots)
+    for lot in lots:
+        code, latest = assay_map.get(lot.pk, ("none", None))
+        lot.assay_status = code
+        lot.assay_latest = latest
+    return render(
+        request,
+        "resin/feed.html",
+        {"lots": lots, "form": form},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def assay_feed(request):
+    """杂质抽检台账：值守工登记，主管作废。"""
+    can_add = can_record_assay(request.user)
+    if request.method == "POST":
+        if not can_add:
+            messages.error(request, "仅值守工可登记杂质抽检。")
+            return redirect("assay_feed")
+        form = ImpurityTestForm(request.POST)
+        if form.is_valid():
+            try:
+                test = record_assay(
+                    lot=form.cleaned_data["lot"],
+                    sampled_on=form.cleaned_data["sampledOn"],
+                    impurity_pct=form.cleaned_data["impurityPct"],
+                    passed=form.cleaned_data["passed"],
+                    chemist=form.cleaned_data["chemist"],
+                    user=request.user,
+                )
+            except AssayConflict as exc:
+                messages.error(request, exc.messages[0])
+            else:
+                messages.success(request, f"脂检 #{test.pk} 已登记")
+            return redirect("assay_feed")
+    else:
+        form = ImpurityTestForm() if can_add else None
+
+    tests = (
+        ImpurityTest.objects.select_related("lot", "recordedBy", "voidedBy")
+        .order_by("-sampledOn", "-id")[:60]
+    )
+    return render(
+        request,
+        "resin/assays.html",
+        {
+            "form": form,
+            "tests": tests,
+            "can_add": can_add,
+            "can_void": can_void_assay(request.user),
+        },
+    )
+
+
+@login_required
+@require_POST
+def void_assay(request, pk):
+    test = get_object_or_404(ImpurityTest, pk=pk)
+    if not can_void_assay(request.user):
+        messages.error(request, "仅主管可作废杂质抽检。")
+        return redirect("assay_feed")
+    try:
+        perform_void_assay(test, user=request.user)
+        messages.success(request, f"脂检 #{test.pk} 已作废，不再作为有效检")
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0] if exc.messages else str(exc))
+    return redirect("assay_feed")

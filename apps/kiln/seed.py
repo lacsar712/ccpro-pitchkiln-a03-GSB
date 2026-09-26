@@ -3,11 +3,12 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
+from .models import CookRun, FireHearth, ImpurityTest, ResinLot, SoftPointProbe
+from .services.roles import SUPERVISOR_GROUP, WORKER_GROUP, ensure_role_groups
 
 
 def ensure_seed_data():
-    """幂等种子：账号 + 来脂批 / 灶台 / 值守 / 探针。"""
+    """幂等种子：账号/角色 + 来脂批 / 灶台 / 值守 / 探针 / 脂检。"""
     User = get_user_model()
 
     if not User.objects.filter(username="admin").exists():
@@ -16,10 +17,22 @@ def ensure_seed_data():
     if not User.objects.filter(username="worker").exists():
         User.objects.create_user("worker", "worker@pitchkiln.local", "123456")
 
+    if not User.objects.filter(username="supervisor").exists():
+        User.objects.create_user(
+            "supervisor", "supervisor@pitchkiln.local", "123456"
+        )
+
+    worker_group, supervisor_group = ensure_role_groups()
+    worker = User.objects.get(username="worker")
+    worker.groups.add(worker_group)
+    foreman = User.objects.get(username="supervisor")
+    foreman.groups.add(supervisor_group)
+
     if FireHearth.objects.exists():
         return
 
     now = timezone.now()
+    today = timezone.localdate()
 
     lot_a = ResinLot.objects.create(
         lotCode="脂-松脂坳-2409A",
@@ -38,6 +51,35 @@ def ensure_seed_data():
         originPlace="松脂坳西岔",
         arrivalKg=Decimal("980.00"),
         receivedAt=now - timezone.timedelta(hours=10),
+    )
+
+    # 脂检：A 批今日合格（有效）；B 批合格检已 6 天（超五日窗）；C 批无任何有效检。
+    test_a_old = ImpurityTest.objects.create(
+        lot=lot_a,
+        sampledOn=today - timezone.timedelta(days=8),
+        impurityPct=Decimal("3.60"),
+        passed=True,
+        chemist="化验林姐",
+        recordedBy=worker,
+    )
+    test_a_old.voidedAt = now - timezone.timedelta(days=7, hours=2)
+    test_a_old.voidedBy = foreman
+    test_a_old.save(update_fields=["voidedAt", "voidedBy"])
+    ImpurityTest.objects.create(
+        lot=lot_a,
+        sampledOn=today,
+        impurityPct=Decimal("1.80"),
+        passed=True,
+        chemist="化验林姐",
+        recordedBy=worker,
+    )
+    ImpurityTest.objects.create(
+        lot=lot_b,
+        sampledOn=today - timezone.timedelta(days=6),
+        impurityPct=Decimal("2.40"),
+        passed=True,
+        chemist="化验老祁",
+        recordedBy=worker,
     )
 
     h1 = FireHearth.objects.create(

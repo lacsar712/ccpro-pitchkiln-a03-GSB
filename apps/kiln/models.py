@@ -1,4 +1,10 @@
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
+
+
+ASSAY_VALID_DAYS = 5
 
 
 class ResinLot(models.Model):
@@ -107,3 +113,74 @@ class SoftPointProbe(models.Model):
 
     def __str__(self):
         return f"{self.softPointC}℃ by {self.samplerName}"
+
+
+class ImpurityTest(models.Model):
+    """来脂批杂质抽检：开灶前该批须有一张仍有效的合格检。"""
+
+    lot = models.ForeignKey(
+        ResinLot,
+        on_delete=models.PROTECT,
+        related_name="impurity_tests",
+        verbose_name="来脂批",
+    )
+    sampledOn = models.DateField("抽检日")
+    impurityPct = models.DecimalField(
+        "杂质百分数(%)",
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    passed = models.BooleanField("是否通过", default=False)
+    chemist = models.CharField("化验人", max_length=80)
+    recordedAt = models.DateTimeField("登记时间", auto_now_add=True)
+    recordedBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="recorded_impurity_tests",
+        verbose_name="登记人",
+        null=True,
+        blank=True,
+    )
+    voidedAt = models.DateTimeField("作废时间", null=True, blank=True)
+    voidedBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="voided_impurity_tests",
+        verbose_name="作废人",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-sampledOn", "-id"]
+        verbose_name = "杂质抽检"
+        verbose_name_plural = "杂质抽检"
+        constraints = [
+            # 同批同一自然日只留一张有效检；作废检不再占位。
+            models.UniqueConstraint(
+                fields=["lot", "sampledOn"],
+                condition=models.Q(voidedAt__isnull=True),
+                name="uniq_active_impurity_test_per_lot_day",
+            )
+        ]
+
+    def __str__(self):
+        mark = "合格" if self.passed else "不合格"
+        return f"脂检#{self.pk} {self.lot.lotCode} {self.sampledOn} {mark}"
+
+    @property
+    def is_void(self):
+        return self.voidedAt is not None
+
+    def is_stale(self, on_date=None):
+        """抽检日早于开灶日的五个自然日前即过期（相隔恰为 5 天仍有效）。"""
+        if self.sampledOn is None:
+            return True
+        if on_date is None:
+            on_date = timezone.localdate()
+        return self.sampledOn < on_date - timezone.timedelta(days=ASSAY_VALID_DAYS)
+
+    def is_valid_open(self, on_date=None):
+        """有效检判定（开灶入口与卡片标识同源）：未作废 + 通过 + 在五自然日窗内。"""
+        return (not self.is_void) and self.passed and (not self.is_stale(on_date))

@@ -20,7 +20,18 @@
   <ol class="lot-feed">
     {% for lot in lots %}
     <li class="lot-card">
-      <div class="lot-code mono">{{ lot.lotCode }}</div>
+      <div class="lot-head">
+        <div class="lot-code mono">{{ lot.lotCode }}</div>
+        {% if lot.assay_status == 'ok' %}
+        <span class="assay-tag ok">有效脂检 #{{ lot.assay_latest.id }} · {{ lot.assay_latest.sampledOn|date:"m-d" }}</span>
+        {% elif lot.assay_status == 'stale' %}
+        <span class="assay-tag stale">脂检超五日窗</span>
+        {% elif lot.assay_status == 'fail' %}
+        <span class="assay-tag fail">脂检不合格</span>
+        {% else %}
+        <span class="assay-tag none">无有效脂检</span>
+        {% endif %}
+      </div>
       <div class="lot-place">{{ lot.originPlace }}</div>
       <div class="lot-meta">
         <span class="mono">{{ lot.arrivalKg }} kg</span>
@@ -32,4 +43,9 @@
     {% endfor %}
   </ol>
 </div>
+
+<p class="assay-window-note">
+  开灶前该批须有一张仍有效的杂质抽检：以该批最新一张未作废脂检为准，须通过且抽检日不早于五个自然日前；
+  作废检、不合格检不计有效。<a href="{% url 'assay_feed' %}">去登记脂检 →</a>
+</p>
 {% endblock %}

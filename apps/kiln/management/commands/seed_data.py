@@ -8,4 +8,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         ensure_seed_data()
-        self.stdout.write(self.style.SUCCESS("种子数据已就绪（admin / worker）"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "种子数据已就绪（admin / worker 值守工 / supervisor 主管，口令 123456）"
+            )
+        )

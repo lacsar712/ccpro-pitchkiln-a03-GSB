@@ -608,6 +608,77 @@ body {
 
 .back-link:hover { text-decoration: underline; }
 
+/* —— impurity assay tags & feed —— */
+.lot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.assay-tag {
+  font-size: 0.68rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.assay-tag.ok { color: var(--ok); }
+.assay-tag.fail { color: var(--danger); }
+.assay-tag.stale { color: #fbbf24; }
+.assay-tag.none { color: var(--steel); }
+
+.assay-window-note {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  color: var(--steel);
+  border-top: 1px dashed #3f342a;
+  padding-top: 0.75rem;
+}
+
+.assay-window-note a { color: var(--ember); text-decoration: none; }
+.assay-window-note a:hover { text-decoration: underline; }
+
+.assay-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.6rem;
+}
+
+.assay-card {
+  background: #161310;
+  border: 1px solid #2e261f;
+  border-left-width: 3px;
+  padding: 0.7rem 0.85rem;
+}
+
+.assay-card.is-pass { border-left-color: var(--ok); }
+.assay-card.is-fail { border-left-color: var(--danger); }
+.assay-card.is-void { border-left-color: var(--cold); opacity: 0.6; }
+.assay-card.empty { grid-column: 1 / -1; color: var(--steel); }
+
+.assay-id { font-size: 0.8rem; color: var(--cinder); font-weight: 700; }
+
+.assay-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+}
+
+.assay-meta dt { color: var(--steel); }
+.assay-meta dd { margin: 0; }
+
+.void-form { margin-top: 0.55rem; }
+.btn-danger { color: #f87171; border-color: #7f1d1d; }
+.btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
 @media (max-width: 900px) {
   .ember-gate { grid-template-columns: 1fr; }
   .floor-grid { margin-right: 0; }

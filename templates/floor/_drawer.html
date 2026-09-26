@@ -57,7 +57,7 @@
   {% else %}
   <section class="drawer-block">
     <h3>开新值守</h3>
-    <p class="hint">冷灶或空灶需绑定来脂批后开灶。</p>
+    <p class="hint">冷灶或空灶需绑定来脂批后开灶。该批最新脂检须合格且抽检日不早于五个自然日前，否则开灶将被拒绝。</p>
     <form method="post" action="{% url 'open_run' hearth.pk %}"
           class="stack-form"
           hx-post="{% url 'open_run' hearth.pk %}"

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}杂质抽检{% endblock %}
+{% block content %}
+<section class="feed-head">
+  <div>
+    <h1>杂质抽检（脂检）</h1>
+    <p class="board-sub">同批同一自然日只留一张 · 合格检五自然日有效</p>
+  </div>
+  <a class="back-link" href="{% url 'home' %}">← 回值守看板</a>
+</section>
+
+<div class="feed-layout">
+  {% if form %}
+  <form method="post" class="lot-intake stack-form">
+    {% csrf_token %}
+    <h2>登记抽检</h2>
+    <p class="hint">值守工登记；杂质百分数取 0～100。</p>
+    {{ form.as_p }}
+    <button type="submit" class="btn-ember">写入脂检</button>
+  </form>
+  {% else %}
+  <div class="lot-intake">
+    <h2>登记抽检</h2>
+    <p class="hint">仅值守工（或主管）可登记脂检。当前账号无登记权限。</p>
+  </div>
+  {% endif %}
+
+  <ol class="assay-feed">
+    {% for t in tests %}
+    <li class="assay-card {% if t.voidedAt %}is-void{% elif t.passed %}is-pass{% else %}is-fail{% endif %}">
+      <div class="lot-head">
+        <span class="assay-id mono">脂检 #{{ t.id }}</span>
+        {% if t.voidedAt %}
+        <span class="assay-tag none">已作废</span>
+        {% elif t.passed %}
+        <span class="assay-tag ok">合格</span>
+        {% else %}
+        <span class="assay-tag fail">不合格</span>
+        {% endif %}
+      </div>
+      <div class="lot-code mono">{{ t.lot.lotCode }}</div>
+      <div class="lot-place">{{ t.lot.originPlace }}</div>
+      <dl class="assay-meta">
+        <dt>抽检日</dt><dd class="mono">{{ t.sampledOn|date:"Y-m-d" }}</dd>
+        <dt>杂质</dt><dd class="mono">{{ t.impurityPct }}%</dd>
+        <dt>化验人</dt><dd>{{ t.chemist }}</dd>
+        <dt>登记人</dt><dd>{{ t.recordedBy.username|default:"—" }}</dd>
+        {% if t.voidedAt %}
+        <dt>作废</dt><dd>{{ t.voidedBy.username|default:"—" }} · {{ t.voidedAt|date:"m-d H:i" }}</dd>
+        {% endif %}
+      </dl>
+      {% if can_void and not t.voidedAt %}
+      <form method="post" action="{% url 'void_assay' t.pk %}"
+            class="void-form"
+            onsubmit="return confirm('确定作废脂检 #{{ t.id }}？作废后不再作为开灶有效检。');">
+        {% csrf_token %}
+        <button type="submit" class="btn-ghost btn-danger">主管作废</button>
+      </form>
+      {% endif %}
+    </li>
+    {% empty %}
+    <li class="assay-card empty">暂无脂检记录</li>
+    {% endfor %}
+  </ol>
+</div>
+
+<p class="assay-window-note">
+  有效检规则：以该批<b>最新一张未作废</b>脂检为准，须「通过」且抽检日不早于开灶日的<b>五个自然日前</b>
+  （抽检日 ≥ 开灶日 − 5 天）；不合格、超五日窗或已作废的检不能开灶。
+</p>
+{% endblock %}
