@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.db.models import Prefetch
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -8,8 +9,16 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .forms import OpenCookRunForm, PhaseChangeForm, ResinLotForm, SoftPointProbeForm
-from .models import CookRun, FireHearth, ResinLot
+from .forms import (
+    ImpurityAssayForm,
+    OpenCookRunForm,
+    PhaseChangeForm,
+    ResinLotForm,
+    SoftPointProbeForm,
+    lot_assay_map,
+)
+from .models import CookRun, FireHearth, ImpurityAssay, ResinLot
+from .services.assay_rules import assert_lot_openable, latest_active_assay
 from .services.floor_rules import change_hearth_phase
 
 
@@ -150,11 +159,24 @@ def open_run(request, pk):
     if form.is_valid():
         run = form.save(commit=False)
         run.hearth = hearth
-        run.save()
-        if hearth.phase == FireHearth.PHASE_COLD:
-            hearth.phase = FireHearth.PHASE_CHARGING
-            hearth.save(update_fields=["phase"])
-        messages.success(request, "新值守已开灶")
+        # 绕过表单直接调用视图也必失败：开灶与有效检判定同源。
+        try:
+            assert_lot_openable(
+                run.resinLot, on_date=timezone.localdate(run.openedAt)
+            )
+        except ValidationError as exc:
+            msg = (
+                exc.message_dict.get("resinLot")
+                if hasattr(exc, "message_dict")
+                else None
+            )
+            messages.error(request, msg[0] if msg else str(exc))
+        else:
+            run.save()
+            if hearth.phase == FireHearth.PHASE_COLD:
+                hearth.phase = FireHearth.PHASE_CHARGING
+                hearth.save(update_fields=["phase"])
+            messages.success(request, "新值守已开灶")
     else:
         for errs in form.errors.values():
             for e in errs:
@@ -207,5 +229,82 @@ def resin_lot_feed(request):
             }
         )
 
-    lots = ResinLot.objects.all()[:40]
-    return render(request, "resin/feed.html", {"lots": lots, "form": form})
+    lots = list(ResinLot.objects.all()[:40])
+    status_map = lot_assay_map(lots)
+    lot_rows = [
+        {"lot": lot, "assay": status_map[lot.pk][0], "valid": status_map[lot.pk][1]}
+        for lot in lots
+    ]
+    return render(
+        request,
+        "resin/feed.html",
+        {"lot_rows": lot_rows, "form": form},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def assay_feed(request):
+    """脂检台账：值守工可登记杂质抽检。"""
+    if request.method == "POST":
+        form = ImpurityAssayForm(request.POST)
+        if form.is_valid():
+            assay = form.save(commit=False)
+            assay.createdBy = request.user
+            # 竞态兜底：并发同日双提交时部分唯一约束拦住第二张。
+            try:
+                assay.save()
+            except IntegrityError:
+                existing = latest_active_assay(
+                    assay.lot, on_date=assay.sampledOn
+                )
+                tag = f"（编号 {existing}）" if existing else ""
+                messages.error(
+                    request,
+                    f"该批 {assay.sampledOn:%Y-%m-%d} 已有未作废抽检{tag}，"
+                    "同日不得重复登记。",
+                )
+            else:
+                messages.success(request, f"杂质抽检已登记（编号 {assay}）")
+            return redirect("assay_feed")
+    else:
+        form = ImpurityAssayForm()
+
+    assays = list(
+        ImpurityAssay.objects.select_related("lot", "createdBy", "voidedBy").all()[:60]
+    )
+    # 同源判定：只有「该批当前有效那张检」才打有效检标。
+    lots = ResinLot.objects.filter(pk__in={a.lot_id for a in assays})
+    status_map = lot_assay_map(list(lots))
+    rows = []
+    for a in assays:
+        latest_a, valid_flag = status_map.get(a.lot_id, (None, False))
+        is_latest_active = latest_a == a
+        rows.append(
+            {
+                "assay": a,
+                "valid": is_latest_active and valid_flag,
+                "is_latest_active": is_latest_active,
+            }
+        )
+    return render(
+        request,
+        "resin/assay_feed.html",
+        {"rows": rows, "form": form},
+    )
+
+
+@login_required
+@require_POST
+def void_assay(request, pk):
+    """主管可作废；作废检不得再当有效。值守工无权。"""
+    assay = get_object_or_404(ImpurityAssay, pk=pk)
+    if not request.user.is_staff:
+        messages.error(request, "只有主管可以作废抽检记录。")
+        return redirect("assay_feed")
+    if assay.is_void:
+        messages.error(request, f"编号 {assay} 已作废，不能重复作废。")
+        return redirect("assay_feed")
+    assay.void(request.user)
+    messages.success(request, f"抽检 {assay} 已作废，不再计为有效检。")
+    return redirect("assay_feed")

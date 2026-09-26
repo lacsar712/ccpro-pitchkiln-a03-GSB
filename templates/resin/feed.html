@@ -4,9 +4,12 @@
 <section class="feed-head">
   <div>
     <h1>来脂批</h1>
-    <p class="board-sub">到货时间线 · 非宽表台账</p>
+    <p class="board-sub">到货时间线 · 非宽表台账 · 开灶须挂一张五日内的有效脂检</p>
   </div>
-  <a class="back-link" href="{% url 'home' %}">← 回值守看板</a>
+  <div class="feed-actions">
+    <a class="back-link" href="{% url 'assay_feed' %}">脂检台账 →</a>
+    <a class="back-link" href="{% url 'home' %}">← 回值守看板</a>
+  </div>
 </section>
 
 <div class="feed-layout">
@@ -18,13 +21,20 @@
   </form>
 
   <ol class="lot-feed">
-    {% for lot in lots %}
+    {% for row in lot_rows %}
     <li class="lot-card">
-      <div class="lot-code mono">{{ lot.lotCode }}</div>
-      <div class="lot-place">{{ lot.originPlace }}</div>
+      <div class="lot-head">
+        <div class="lot-code mono">{{ row.lot.lotCode }}</div>
+        {% if row.valid %}
+        <span class="assay-tag ok" title="编号 {{ row.assay }} · 抽检日 {{ row.assay.sampledOn|date:'Y-m-d' }}">有效检</span>
+        {% else %}
+        <span class="assay-tag no">无有效检</span>
+        {% endif %}
+      </div>
+      <div class="lot-place">{{ row.lot.originPlace }}</div>
       <div class="lot-meta">
-        <span class="mono">{{ lot.arrivalKg }} kg</span>
-        <span>{{ lot.receivedAt|date:"Y-m-d H:i" }}</span>
+        <span class="mono">{{ row.lot.arrivalKg }} kg</span>
+        <span>{{ row.lot.receivedAt|date:"Y-m-d H:i" }}</span>
       </div>
     </li>
     {% empty %}

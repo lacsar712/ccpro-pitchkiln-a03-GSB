@@ -608,6 +608,107 @@ body {
 
 .back-link:hover { text-decoration: underline; }
 
+.feed-actions {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.lot-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.assay-tag {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.assay-tag.ok { color: var(--ok); }
+.assay-tag.no { color: var(--steel); border-color: #57534e; }
+
+/* —— 脂检台账 —— */
+.assay-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border-left: 2px solid #3f342a;
+  padding-left: 0.85rem;
+}
+
+.assay-card {
+  background: #161310;
+  border: 1px solid #2e261f;
+  border-left: 3px solid var(--steel);
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.assay-card.ok { border-left-color: var(--ok); }
+.assay-card.fail { border-left-color: var(--drawing); }
+.assay-card.stale { border-left-color: #a16207; }
+.assay-card.sup { border-left-color: #57534e; }
+.assay-card.void { opacity: 0.55; }
+.assay-card.empty {
+  color: var(--steel);
+  align-items: flex-start;
+}
+
+.assay-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.assay-code { font-weight: 700; font-size: 0.88rem; }
+
+.assay-state {
+  font-size: 0.68rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.st-ok { color: var(--ok); }
+.st-fail { color: var(--drawing); }
+.st-stale { color: #d97706; }
+.st-sup { color: #78716c; }
+.st-void { color: var(--steel); border-color: #57534e; }
+
+.assay-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-size: 0.8rem;
+  color: var(--cinder);
+}
+
+.assay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--steel);
+}
+
+.void-form { margin: 0; }
+
+.btn-void { padding: 0.2rem 0.5rem; font-size: 0.72rem; }
+
 @media (max-width: 900px) {
   .ember-gate { grid-template-columns: 1fr; }
   .floor-grid { margin-right: 0; }

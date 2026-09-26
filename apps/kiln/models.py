@@ -1,4 +1,7 @@
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class ResinLot(models.Model):
@@ -107,3 +110,66 @@ class SoftPointProbe(models.Model):
 
     def __str__(self):
         return f"{self.softPointC}℃ by {self.samplerName}"
+
+
+class ImpurityAssay(models.Model):
+    """来脂批杂质抽检：同批同一自然日只允许一张有效（未作废）记录。"""
+
+    lot = models.ForeignKey(
+        ResinLot,
+        on_delete=models.PROTECT,
+        related_name="assays",
+        verbose_name="来脂批",
+    )
+    sampledOn = models.DateField("抽检日")
+    impurityPct = models.DecimalField(
+        "杂质百分数(%)",
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    passed = models.BooleanField("是否通过", default=False)
+    chemistName = models.CharField("化验人", max_length=80)
+    createdBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="assays_created",
+        verbose_name="登记人",
+    )
+    voidedAt = models.DateTimeField("作废时间", null=True, blank=True)
+    voidedBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assays_voided",
+        verbose_name="作废人",
+    )
+
+    class Meta:
+        ordering = ["-sampledOn", "-id"]
+        verbose_name = "杂质抽检"
+        verbose_name_plural = "杂质抽检"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lot", "sampledOn"],
+                condition=models.Q(voidedAt__isnull=True),
+                name="uniq_active_assay_per_lot_day",
+            ),
+        ]
+
+    def __str__(self):
+        return f"杂检-{self.lot.lotCode}-{self.sampledOn:%Y%m%d}"
+
+    @property
+    def is_void(self):
+        return self.voidedAt is not None
+
+    def void(self, user):
+        """主管作废；已作废的记录不得再当有效。"""
+        if self.voidedAt is not None:
+            return self
+        self.voidedAt = timezone.now()
+        self.voidedBy = user
+        self.save(update_fields=["voidedAt", "voidedBy"])
+        return self

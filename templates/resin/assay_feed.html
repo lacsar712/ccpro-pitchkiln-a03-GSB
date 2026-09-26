@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}脂检台账{% endblock %}
+{% block content %}
+<section class="feed-head">
+  <div>
+    <h1>脂检台账</h1>
+    <p class="board-sub">来脂批杂质抽检 · 同批同自然日只留一张 · 五日有效窗</p>
+  </div>
+  <div class="feed-actions">
+    <a class="back-link" href="{% url 'resin_lot_feed' %}">← 回来脂批</a>
+    <a class="back-link" href="{% url 'home' %}">值守看板</a>
+  </div>
+</section>
+
+<div class="feed-layout">
+  <form method="post" class="lot-intake stack-form">
+    {% csrf_token %}
+    <h2>登记杂质抽检</h2>
+    <p class="hint">开灶前置：该批最新一张须为<b>通过</b>检，且抽检日不早于<b>五个自然日</b>前。</p>
+    {{ form.as_p }}
+    <button type="submit" class="btn-ember">写入脂检</button>
+  </form>
+
+  <ol class="assay-feed">
+    {% for row in rows %}
+    <li class="assay-card {% if row.assay.is_void %}void{% elif row.valid %}ok{% elif row.is_latest_active and not row.assay.passed %}fail{% elif row.is_latest_active %}stale{% else %}sup{% endif %}">
+      <div class="assay-top">
+        <span class="assay-code mono">{{ row.assay }}</span>
+        {% if row.assay.is_void %}
+        <span class="assay-state st-void">已作废</span>
+        {% elif row.valid %}
+        <span class="assay-state st-ok">有效检</span>
+        {% elif not row.is_latest_active %}
+        <span class="assay-state st-sup">已被新检取代</span>
+        {% elif not row.assay.passed %}
+        <span class="assay-state st-fail">未通过</span>
+        {% else %}
+        <span class="assay-state st-stale">已过五日窗</span>
+        {% endif %}
+      </div>
+      <div class="assay-line">
+        <span class="mono">{{ row.assay.impurityPct }}%</span>
+        <span>杂质 · {{ row.assay.passed|yesno:"通过,未通过" }}</span>
+        <span>{{ row.assay.sampledOn|date:"Y-m-d" }}</span>
+      </div>
+      <div class="assay-meta">
+        <span>化验人 {{ row.assay.chemistName }}</span>
+        <span>登记 {{ row.assay.createdBy.username }}</span>
+        {% if row.assay.is_void %}
+        <span>作废人 {{ row.assay.voidedBy.username }} · {{ row.assay.voidedAt|date:"m-d H:i" }}</span>
+        {% elif user.is_staff %}
+        <form method="post" action="{% url 'void_assay' row.assay.pk %}"
+              class="void-form" onsubmit="return confirm('确认作废该抽检？作废后不再计为有效检。');">
+          {% csrf_token %}
+          <button type="submit" class="btn-ghost btn-void">主管作废</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% empty %}
+    <li class="assay-card empty">暂无抽检记录 — 开灶前须先登记一张有效脂检</li>
+    {% endfor %}
+  </ol>
+</div>
+{% endblock %}

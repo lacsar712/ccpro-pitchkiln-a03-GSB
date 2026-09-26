@@ -3,7 +3,13 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
+from .models import (
+    CookRun,
+    FireHearth,
+    ImpurityAssay,
+    ResinLot,
+    SoftPointProbe,
+)
 
 
 def ensure_seed_data():
@@ -15,6 +21,9 @@ def ensure_seed_data():
 
     if not User.objects.filter(username="worker").exists():
         User.objects.create_user("worker", "worker@pitchkiln.local", "123456")
+
+    admin_user = User.objects.get(username="admin")
+    worker_user = User.objects.get(username="worker")
 
     if FireHearth.objects.exists():
         return
@@ -38,6 +47,48 @@ def ensure_seed_data():
         originPlace="松脂坳西岔",
         arrivalKg=Decimal("980.00"),
         receivedAt=now - timezone.timedelta(hours=10),
+    )
+
+    today = timezone.localdate(now)
+
+    # lot_a：当日通过检 → 有效检。
+    ImpurityAssay.objects.create(
+        lot=lot_a,
+        sampledOn=today,
+        impurityPct=Decimal("1.80"),
+        passed=True,
+        chemistName="化验林姐",
+        createdBy=worker_user,
+    )
+
+    # lot_b：一张早已作废的旧检 + 两日前的通过检 → 有效检（作废检不计）。
+    ImpurityAssay.objects.create(
+        lot=lot_b,
+        sampledOn=today - timezone.timedelta(days=20),
+        impurityPct=Decimal("6.40"),
+        passed=False,
+        chemistName="化验林姐",
+        createdBy=worker_user,
+        voidedAt=now - timezone.timedelta(days=18),
+        voidedBy=admin_user,
+    )
+    ImpurityAssay.objects.create(
+        lot=lot_b,
+        sampledOn=today - timezone.timedelta(days=2),
+        impurityPct=Decimal("2.35"),
+        passed=True,
+        chemistName="化验老吴",
+        createdBy=worker_user,
+    )
+
+    # lot_c：最新一张为未通过检 → 无有效检，演示开灶被拒。
+    ImpurityAssay.objects.create(
+        lot=lot_c,
+        sampledOn=today - timezone.timedelta(days=1),
+        impurityPct=Decimal("7.90"),
+        passed=False,
+        chemistName="化验老吴",
+        createdBy=worker_user,
     )
 
     h1 = FireHearth.objects.create(
